@@ -1,14 +1,14 @@
 FROM python:3.9-slim
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
 # Copy and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your code
+# Copy your project files
 COPY . .
 
-# Define the command to run your bot
+# Define the entry point
 CMD ["python", "discordbot.py"]
