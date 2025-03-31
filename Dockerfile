@@ -3,12 +3,15 @@ FROM python:3.10-slim
 # Set the working directory
 WORKDIR /app
 
-# Copy the dependency file and install packages
+# Copy dependency file and install packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the project files
+# Copy all project files
 COPY . .
 
-# Run the bot using the entry point
+# Expose port 8080 for health checks
+EXPOSE 8080
+
+# Run the application using main.py as the entry point
 CMD ["python", "main.py"]
