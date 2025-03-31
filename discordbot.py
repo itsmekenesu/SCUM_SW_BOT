@@ -6,6 +6,8 @@ from discord.ext import commands
 from discord import ui
 import requests
 from dotenv import load_dotenv
+from discordbot import bot, BOT_TOKEN
+
 
 # Load environment variables from .env
 load_dotenv()
