@@ -7,10 +7,10 @@ from discord import ui
 import requests
 from dotenv import load_dotenv
 
-# For local testing, load environment variables from .env.
+# Load environment variables (for local testing; production uses app-level variables)
 load_dotenv()
 
-# Setup logging for debugging
+# Setup logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
