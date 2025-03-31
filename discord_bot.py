@@ -7,14 +7,14 @@ from discord import ui
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables for local testing
+# For local testing, load environment variables from .env.
 load_dotenv()
 
-# Setup logging
+# Setup logging for debugging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
-# Retrieve environment variables (DigitalOcean will provide these via App-Level settings)
+# Retrieve required environment variables.
 BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 if not BOT_TOKEN:
     logging.error("DISCORD_TOKEN is not set in environment variables.")
@@ -30,7 +30,7 @@ except ValueError:
     logging.error("Channel IDs must be integers.")
     sys.exit(1)
 
-# Modal for sending in-game text
+# Modal for sending in-game text.
 class CustomTextModal(ui.Modal, title="Send In-Game Text"):
     text_input = ui.TextInput(label="Message", style=discord.TextStyle.short)
 
@@ -50,7 +50,7 @@ class CustomTextModal(ui.Modal, title="Send In-Game Text"):
         except Exception as e:
             await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
 
-# View for bot control buttons
+# View for bot control buttons.
 class ControlView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -75,7 +75,7 @@ class ControlView(ui.View):
         except Exception as e:
             await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
 
-# View for registration buttons
+# View for registration buttons.
 class RegistrationView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -120,7 +120,7 @@ class RegistrationView(ui.View):
         except Exception as e:
             await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
 
-# Create the bot instance with appropriate intents
+# Create the bot instance with required intents.
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -129,7 +129,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     logging.info(f"Logged in as {bot.user}")
 
-    # Set up the registration channel
+    # Set up the registration channel.
     reg_channel = bot.get_channel(REGISTRATION_CHANNEL_ID)
     if reg_channel:
         await reg_channel.purge(limit=10)
@@ -137,7 +137,7 @@ async def on_ready():
     else:
         logging.warning(f"Registration channel with ID {REGISTRATION_CHANNEL_ID} not found.")
 
-    # Set up the control channel
+    # Set up the control channel.
     control_channel = bot.get_channel(CONTROL_CHANNEL_ID)
     if control_channel:
         await control_channel.purge(limit=10)
