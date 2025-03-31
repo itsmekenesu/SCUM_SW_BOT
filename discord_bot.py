@@ -1,57 +1,38 @@
-import os
-import requests
 import discord
 from discord.ext import commands
-from discord import ui
+import requests
+import os
 
-# Retrieve the bot token from environment variables.
-BOT_TOKEN = os.getenv("DISCORD_TOKEN")
-if not BOT_TOKEN:
-    raise Exception("DISCORD_TOKEN is not set!")
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-SCUM_API_KEY = os.getenv("SCUM_API_KEY", "default_secret_key")
+VPS_API_URL = os.getenv("VPS_API_URL", "http://localhost:5000")
+VPS_API_KEY = os.getenv("VPS_API_KEY")
 
-# Import the active_scum_bot variable from our API module.
-from api import active_scum_bot
+@bot.command(name="scum")
+@commands.has_role("Admin")  # Restrict to Admin role
+async def scum_command(ctx, bot_id: str, action: str):
+    valid_actions = ["verify", "status"]
+    if action not in valid_actions:
+        await ctx.send(f"❌ Invalid action. Use: {', '.join(valid_actions)}")
+        return
 
-class ControlView(ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @ui.button(label="Send Text", style=discord.ButtonStyle.success, custom_id="send_text")
-    async def send_text(self, interaction: discord.Interaction, button: ui.Button):
-        # Immediately defer the response to avoid timeout.
-        await interaction.response.defer(ephemeral=True)
-        
-        # Re-import active_scum_bot to get the latest value.
-        from api import active_scum_bot
-        if not active_scum_bot:
-            await interaction.followup.send("SCUM bot is offline.", ephemeral=True)
-            return
-
-        callback_url = active_scum_bot.get("callback_url")
-        payload = {"text": "Command triggered via Discord"}
-        headers = {"X-API-Key": SCUM_API_KEY}
-        try:
-            response = requests.post(callback_url, json=payload, headers=headers, timeout=5)
-            if response.status_code == 200:
-                await interaction.followup.send("Command forwarded to SCUM bot!", ephemeral=True)
-            else:
-                await interaction.followup.send(f"SCUM bot error: {response.text}", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"Error connecting to SCUM bot: {e}", ephemeral=True)
-
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
+    command = "send_verification" if action == "verify" else "status_check"
+    response = requests.post(
+        f"{VPS_API_URL}/bot/command",
+        json={"bot_id": bot_id, "command": command},
+        headers={"X-API-Key": VPS_API_KEY}
+    )
+    
+    if response.status_code == 200:
+        await ctx.send(f"✅ Command '{action}' sent to bot {bot_id}")
+    else:
+        await ctx.send(f"❌ Error: {response.text}")
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
-    channel_id = int(os.getenv("REGISTRATION_CHANNEL_ID", "1355434230594666594"))
-    channel = bot.get_channel(channel_id)
-    if channel:
-        await channel.send("SCUM Bot Control Panel", view=ControlView())
-    else:
-        print("Channel for control panel not found.")
+    print(f"🤖 Logged in as {bot.user}")
+    await bot.change_presence(activity=discord.Game(name="SCUM Controller"))
 
-# Export BOT_TOKEN and bot for main.py.
-__all__ = ['bot', 'BOT_TOKEN']
+# Run the bot
+bot.run(os.getenv("DISCORD_TOKEN"))
