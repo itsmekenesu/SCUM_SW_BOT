@@ -4,6 +4,11 @@ import discord
 from discord.ext import commands
 from discord import ui
 
+# Retrieve the bot token from environment variables.
+BOT_TOKEN = os.getenv("DISCORD_TOKEN")
+if not BOT_TOKEN:
+    raise Exception("DISCORD_TOKEN is not set in environment variables!")
+
 SCUM_API_KEY = os.getenv("SCUM_API_KEY", "default_secret_key")
 
 # Import the active_scum_bot variable from our API module.
@@ -15,7 +20,7 @@ class ControlView(ui.View):
 
     @ui.button(label="Send Text", style=discord.ButtonStyle.success, custom_id="send_text")
     async def send_text(self, interaction: discord.Interaction, button: ui.Button):
-        # Re-import active_scum_bot to get the current value.
+        # Re-import active_scum_bot to get the latest value.
         from api import active_scum_bot
         if not active_scum_bot:
             await interaction.response.send_message("SCUM bot is offline.", ephemeral=True)
@@ -45,4 +50,5 @@ async def on_ready():
     else:
         print("Channel for control panel not found.")
 
-# bot.run() will be called in main.py.
+# Export BOT_TOKEN and bot for use in main.py
+__all__ = ['bot', 'BOT_TOKEN']
