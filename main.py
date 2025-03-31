@@ -10,7 +10,8 @@ def home():
     return "OK", 200
 
 def run_flask():
-    app.run(host="0.0.0.0", port=8080)
+    # Run on port 8079 to match DigitalOcean's readiness probe.
+    app.run(host="0.0.0.0", port=8079)
 
 if __name__ == "__main__":
     # Start Flask in a separate thread.
