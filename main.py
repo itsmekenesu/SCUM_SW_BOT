@@ -1,31 +1,22 @@
 from threading import Thread
 from waitress import serve
-from api import app as registration_app
+from api import app as api_app
 from discord_bot import bot, BOT_TOKEN
-import time
 
-def run_api_server():
-    print("🔧 Starting API server on port 8079")
-    serve(registration_app, host="0.0.0.0", port=8079, threads=4)
-    print("✅ API server is running")
+def run_api():
+    print("🌐 Starting API server on 0.0.0.0:8079")
+    serve(api_app, host="0.0.0.0", port=8079)
+    print("✅ API Server Ready")
 
 if __name__ == "__main__":
-    print("🚀 Launching application...")
-    
-    # Start API server
-    api_thread = Thread(target=run_api_server)
-    api_thread.daemon = True
+    # Start API first
+    api_thread = Thread(target=run_api, daemon=True)
     api_thread.start()
     
-    # Wait for API to initialize
-    time.sleep(2)
-    
+    # Then start Discord bot
     print("🤖 Starting Discord bot...")
-    try:
-        bot.run(BOT_TOKEN)
-    except Exception as e:
-        print(f"❌ Bot failed: {str(e)}")
+    bot.run(BOT_TOKEN)
     
     # Keep main thread alive
     while True:
-        time.sleep(1)
+        pass
