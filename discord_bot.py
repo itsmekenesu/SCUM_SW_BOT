@@ -3,13 +3,16 @@ from discord.ext import commands
 import requests
 import os
 
-# Enable necessary intents
+# Initialize bot with required intents
 intents = discord.Intents.default()
-intents.message_content = True  # Required for command interactions
-intents.members = True          # Required for role checks
+intents.message_content = True
+intents.members = True
 
+# Explicitly define BOT_TOKEN for import
+BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# API configuration
 VPS_API_URL = os.getenv("VPS_API_URL", "http://localhost:8079")
 VPS_API_KEY = os.getenv("VPS_API_KEY")
 
@@ -18,22 +21,18 @@ VPS_API_KEY = os.getenv("VPS_API_KEY")
 async def scum_command(ctx, bot_id: str, action: str):
     """Handle SCUM bot commands"""
     try:
-        # Immediately defer the response
         await ctx.defer(ephemeral=True)
     except discord.NotFound:
-        await ctx.send("⚠️ Interaction timed out! Please try again.")
+        await ctx.send("⚠️ Command timed out! Try again.")
         return
 
     valid_actions = ["verify", "status"]
     
     if action not in valid_actions:
-        await ctx.followup.send(
-            f"❌ Invalid action. Valid options: {', '.join(valid_actions)}"
-        )
+        await ctx.followup.send(f"❌ Invalid action. Use: {', '.join(valid_actions)}")
         return
 
     try:
-        # Send command to VPS API
         command = "send_verification" if action == "verify" else "status_check"
         response = requests.post(
             f"{VPS_API_URL}/bot/command",
@@ -43,26 +42,14 @@ async def scum_command(ctx, bot_id: str, action: str):
         )
         
         if response.status_code == 200:
-            await ctx.followup.send(
-                f"✅ Command '{action}' executed for bot {bot_id}"
-            )
+            await ctx.followup.send(f"✅ Command '{action}' sent to {bot_id}")
         else:
-            await ctx.followup.send(
-                f"❌ API Error ({response.status_code}): {response.text}"
-            )
+            await ctx.followup.send(f"❌ API Error: {response.text}")
             
-    except requests.Timeout:
-        await ctx.followup.send("⌛ Command timed out - try again later")
     except Exception as e:
-        await ctx.followup.send(f"🔥 Critical error: {str(e)}")
-        raise e
+        await ctx.followup.send(f"🔥 Error: {str(e)}")
 
 @bot.event
 async def on_ready():
-    print(f"🤖 Connected as {bot.user.name} (ID: {bot.user.id})")
-    await bot.change_presence(
-        activity=discord.Game(name="SCUM Management")
-    )
-
-if __name__ == "__main__":
-    bot.run(os.getenv("DISCORD_TOKEN"))
+    print(f"🤖 Connected as {bot.user}")
+    await bot.change_presence(activity=discord.Game(name="SCUM Control Panel"))
