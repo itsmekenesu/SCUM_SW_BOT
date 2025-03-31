@@ -1,31 +1,16 @@
-"""
-main.py
-
-Main SCUM bot code that monitors SCUM logs, manages game state, and interacts with the local API.
-It performs recovery screen identification, updates game state, fetches online players, and 
-also starts a registration API server (using Waitress) so that a Discord bot can handle account linking.
-"""
-
 from threading import Thread
-from flask import Flask
+from waitress import serve
+from api import app as registration_app
 from discord_bot import bot, BOT_TOKEN
 
-# Minimal Flask app for health checks.
-app = Flask("health")
-
-@app.route("/")
-def home():
-    return "OK", 200
-
-def run_flask():
-    # Run on port 8079 to match DigitalOcean's readiness probe.
-    app.run(host="0.0.0.0", port=8079)
+def run_api_server():
+    # Serve the API (including /scum_checkin) on port 5000.
+    serve(registration_app, host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
-    # Start Flask in a separate thread.
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
+    # Start the API server in a separate thread.
+    api_thread = Thread(target=run_api_server, daemon=True)
+    api_thread.start()
     
     # Start the Discord bot.
     bot.run(BOT_TOKEN)
