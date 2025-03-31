@@ -1,14 +1,14 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
-# Set working directory
+# Set the working directory
 WORKDIR /app
 
-# Copy and install dependencies
+# Copy the dependency file and install packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your project files
+# Copy the rest of the project files
 COPY . .
 
-# Define the entry point
-CMD ["python", "discordbot.py"]
+# Run the bot using the entry point
+CMD ["python", "main.py"]
