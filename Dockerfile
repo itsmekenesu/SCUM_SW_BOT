@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose the correct port
-EXPOSE 5000
+# Expose the correct port (matches main.py's 8079)
+EXPOSE 8079
 
-# Run the application with Gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "api:app"]
+# Start both services
+CMD ["python", "main.py"]
