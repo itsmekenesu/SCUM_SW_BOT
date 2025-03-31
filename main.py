@@ -1,3 +1,11 @@
+"""
+main.py
+
+Main SCUM bot code that monitors SCUM logs, manages game state, and interacts with the local API.
+It performs recovery screen identification, updates game state, fetches online players, and 
+also starts a registration API server (using Waitress) so that a Discord bot can handle account linking.
+"""
+
 from threading import Thread
 from flask import Flask
 from discord_bot import bot, BOT_TOKEN
