@@ -71,7 +71,7 @@ def send_command():
         return jsonify({"error": "Missing command"}), 400
 
     now = time.time()
-    # Consider bots with a heartbeat in the last 2 minutes as online.
+    # Consider bots with a heartbeat within the last 2 minutes as online.
     online_bots = {bot_id: info for bot_id, info in registered_bots.items() if now - info["last_heartbeat"] < 120}
     if not online_bots:
         return jsonify({"error": "No bots online"}), 404
