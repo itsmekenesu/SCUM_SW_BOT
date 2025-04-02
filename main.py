@@ -1,30 +1,22 @@
-import threading
-import time
-import logging
-import os
-from dotenv import load_dotenv
+from threading import Thread
 from waitress import serve
+from api import app, AutoConfigBot
+from discord_bot import bot, BOT_TOKEN
+import os
 
-load_dotenv()
-logging.basicConfig(level=logging.INFO)
-PORT = int(os.getenv("PORT", 8079))
-
-# Import the SCUM BOT Flask app and class.
-from scum_bot import app as scum_app, ScumBot
-# Import the Discord bot runner.
-from discord_bot import run_discord_bot
-
-def run_scum_bot_server():
-    bot = ScumBot()
-    bot.start()
-    logging.info(f"Starting SCUM BOT server on port {PORT}")
-    serve(scum_app, host="0.0.0.0", port=PORT)
+def run_api_server():
+    # Use the PORT environment variable or default to 5001.
+    port = int(os.environ.get("PORT", 5001))
+    serve(app, host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    # Start the SCUM BOT server in a daemon thread.
-    scum_thread = threading.Thread(target=run_scum_bot_server, daemon=True)
-    scum_thread.start()
-    # Wait briefly for the SCUM BOT server to start.
-    time.sleep(5)
-    # Start the Discord bot (this call blocks).
-    run_discord_bot()
+    # Instantiate and start the SCUM BOT (this sets up routes, registration, heartbeat, etc.)
+    bot_api = AutoConfigBot()
+    bot_api.start()
+
+    # Start the API server in a background thread.
+    api_thread = Thread(target=run_api_server, daemon=True)
+    api_thread.start()
+    
+    # Start the Discord bot (this is blocking).
+    bot.run(BOT_TOKEN)
