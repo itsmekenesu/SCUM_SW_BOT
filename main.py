@@ -3,16 +3,16 @@ import time
 import logging
 import os
 from dotenv import load_dotenv
+from waitress import serve
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 PORT = int(os.getenv("PORT", 8079))
 
-# Import the SCUM BOT application and class.
+# Import the SCUM BOT Flask app and class.
 from scum_bot import app as scum_app, ScumBot
 # Import the Discord bot runner.
 from discord_bot import run_discord_bot
-from waitress import serve
 
 def run_scum_bot_server():
     bot = ScumBot()
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # Start the SCUM BOT server in a daemon thread.
     scum_thread = threading.Thread(target=run_scum_bot_server, daemon=True)
     scum_thread.start()
-    # Wait briefly to allow the SCUM BOT server to start.
+    # Wait briefly for the SCUM BOT server to start.
     time.sleep(5)
     # Start the Discord bot (this call blocks).
     run_discord_bot()
