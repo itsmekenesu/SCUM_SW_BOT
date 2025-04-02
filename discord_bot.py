@@ -3,7 +3,10 @@ from discord.ext import commands
 import requests
 import os
 
+# Enable the privileged message content intent
 intents = discord.Intents.default()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 VPS_API_URL = os.getenv("VPS_API_URL", "http://localhost:5000")
@@ -44,5 +47,6 @@ async def on_ready():
     print(f"🤖 Logged in as {bot.user}")
     await bot.change_presence(activity=discord.Game(name="SCUM Controller"))
 
-# Run the bot
-bot.run(os.getenv("DISCORD_TOKEN"))
+def run_bot():
+    BOT_TOKEN = os.getenv("DISCORD_TOKEN")
+    bot.run(BOT_TOKEN)
