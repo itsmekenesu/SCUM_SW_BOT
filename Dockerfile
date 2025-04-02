@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# System dependencies
+# Install system dependencies.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
@@ -8,15 +8,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Python dependencies
+# Install Python dependencies.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application code
+# Copy application code.
 COPY . .
 
-# Network configuration
+# Expose the port that the SCUM BOT’s Flask server uses.
 EXPOSE 8079
 
-# Startup command
+# Startup command.
 CMD ["python", "main.py"]
