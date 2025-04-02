@@ -8,12 +8,16 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
+# Retrieve environment variables.
 VPS_API_URL = os.getenv("VPS_API_URL")
 API_KEY = os.getenv("VPS_API_KEY")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+# Create Discord intents and enable message content.
 intents = discord.Intents.default()
 intents.message_content = True
+
+# Create the Discord bot with command prefix "!".
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
@@ -32,7 +36,9 @@ async def say(ctx, *, message: str):
         )
         response.raise_for_status()
         data = response.json()
-        await ctx.send(f"Command forwarded to bot {data.get('bot_id')}. Response: {data.get('bot_response')}")
+        bot_id = data.get("bot_id")
+        bot_response = data.get("bot_response")
+        await ctx.send(f"Command forwarded to bot {bot_id}. Response: {bot_response}")
     except Exception as e:
         logging.error(f"Failed to send command: {str(e)}")
         await ctx.send("Failed to send command. Are bots online?")
@@ -49,10 +55,15 @@ async def status(ctx):
         )
         response.raise_for_status()
         data = response.json()
-        await ctx.send(f"Bot {data.get('bot_id')} status: {data.get('bot_response')}")
+        bot_id = data.get("bot_id")
+        bot_response = data.get("bot_response")
+        await ctx.send(f"Bot {bot_id} status: {bot_response}")
     except Exception as e:
         logging.error(f"Failed to get status: {str(e)}")
         await ctx.send("Failed to get bot status.")
 
 def run_discord_bot():
     bot.run(BOT_TOKEN)
+
+if __name__ == "__main__":
+    run_discord_bot()
