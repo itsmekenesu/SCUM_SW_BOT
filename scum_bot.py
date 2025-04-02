@@ -9,7 +9,7 @@ from threading import Thread
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Import your game integration functions.
+# These are your game integration functions.
 from state_manager import BotState, get_state
 from bot_ready import send_verification_message, send_status_check_message, send_chat_message
 
@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-PORT = int(os.getenv("PORT", 8079))  # Use the port from .env (e.g., 8079)
+PORT = int(os.getenv("PORT", 8079))  # Port for the SCUM BOT server.
 
 class ScumBot:
     def __init__(self):
@@ -90,7 +90,7 @@ class ScumBot:
             if request.headers.get("X-API-Key") != self.api_key:
                 return jsonify({"error": "Unauthorized"}), 403
 
-            # Check if the bot is in a ready state.
+            # Ensure bot is in a ready state.
             if get_state() not in [BotState.BOT_READY, BotState.BOT_VERIFYING]:
                 return jsonify({"error": "Bot not ready"}), 503
 
