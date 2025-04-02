@@ -1,53 +1,22 @@
-import discord
-from discord.ext import commands
-import requests
+from threading import Thread
+from waitress import serve
+from api import app, AutoConfigBot
+from discord_bot import bot, BOT_TOKEN
 import os
 
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-VPS_API_URL = os.getenv("VPS_API_URL", "http://localhost:5000")
-VPS_API_KEY = os.getenv("VPS_API_KEY")
-
-@bot.command(name="scum")
-@commands.has_role("Admin")
-async def scum_command(ctx, bot_id: str, action: str):
-    valid_actions = ["verify", "status"]
-    if action not in valid_actions:
-        await ctx.send(f"❌ Invalid action. Use: {', '.join(valid_actions)}")
-        return
-
-    command = "verify" if action == "verify" else "status"
-    response = requests.post(
-        f"{VPS_API_URL}/bot/command",
-        json={"bot_id": bot_id, "command": command},
-        headers={"X-API-Key": VPS_API_KEY}
-    )
-    
-    if response.status_code == 200:
-        await ctx.send(f"✅ Command '{action}' sent to bot {bot_id}")
-    else:
-        await ctx.send(f"❌ Error: {response.text}")
-
-@bot.command(name="say")
-@commands.has_role("Admin")
-async def say_command(ctx, bot_id: str, *, message: str):
-    response = requests.post(
-        f"{VPS_API_URL}/bot/command",
-        json={"bot_id": bot_id, "command": f"say {message}"},
-        headers={"X-API-Key": VPS_API_KEY}
-    )
-    if response.status_code == 200:
-        await ctx.send(f"✅ Command 'say' sent to bot {bot_id}")
-    else:
-        await ctx.send(f"❌ Error: {response.text}")
-
-@bot.event
-async def on_ready():
-    print(f"🤖 Logged in as {bot.user}")
-    await bot.change_presence(activity=discord.Game(name="SCUM Controller"))
-
-BOT_TOKEN = os.getenv("DISCORD_TOKEN")
+def run_api_server():
+    # Use the PORT environment variable or default to 5001.
+    port = int(os.environ.get("PORT", 5001))
+    serve(app, host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
+    # Instantiate and start the SCUM BOT (this sets up routes, registration, heartbeat, etc.)
+    bot_api = AutoConfigBot()
+    bot_api.start()
+
+    # Start the API server in a background thread.
+    api_thread = Thread(target=run_api_server, daemon=True)
+    api_thread.start()
+    
+    # Start the Discord bot (this is blocking).
     bot.run(BOT_TOKEN)
