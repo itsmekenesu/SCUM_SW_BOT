@@ -1,19 +1,53 @@
-from threading import Thread
-from waitress import serve
-from api import app as registration_app
-import discord_bot
+import discord
+from discord.ext import commands
+import requests
+import os
 
-def run_api_server():
-    # Serve the API on port 8079.
-    serve(registration_app, host="0.0.0.0", port=8079)
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-def run_discord_bot():
-    discord_bot.run_bot()
+VPS_API_URL = os.getenv("VPS_API_URL", "http://localhost:5000")
+VPS_API_KEY = os.getenv("VPS_API_KEY")
+
+@bot.command(name="scum")
+@commands.has_role("Admin")
+async def scum_command(ctx, bot_id: str, action: str):
+    valid_actions = ["verify", "status"]
+    if action not in valid_actions:
+        await ctx.send(f"❌ Invalid action. Use: {', '.join(valid_actions)}")
+        return
+
+    command = "verify" if action == "verify" else "status"
+    response = requests.post(
+        f"{VPS_API_URL}/bot/command",
+        json={"bot_id": bot_id, "command": command},
+        headers={"X-API-Key": VPS_API_KEY}
+    )
+    
+    if response.status_code == 200:
+        await ctx.send(f"✅ Command '{action}' sent to bot {bot_id}")
+    else:
+        await ctx.send(f"❌ Error: {response.text}")
+
+@bot.command(name="say")
+@commands.has_role("Admin")
+async def say_command(ctx, bot_id: str, *, message: str):
+    response = requests.post(
+        f"{VPS_API_URL}/bot/command",
+        json={"bot_id": bot_id, "command": f"say {message}"},
+        headers={"X-API-Key": VPS_API_KEY}
+    )
+    if response.status_code == 200:
+        await ctx.send(f"✅ Command 'say' sent to bot {bot_id}")
+    else:
+        await ctx.send(f"❌ Error: {response.text}")
+
+@bot.event
+async def on_ready():
+    print(f"🤖 Logged in as {bot.user}")
+    await bot.change_presence(activity=discord.Game(name="SCUM Controller"))
+
+BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 
 if __name__ == "__main__":
-    # Start the API server in a background thread.
-    api_thread = Thread(target=run_api_server, daemon=True)
-    api_thread.start()
-    
-    # Start the Discord bot in the main thread.
-    run_discord_bot()
+    bot.run(BOT_TOKEN)
