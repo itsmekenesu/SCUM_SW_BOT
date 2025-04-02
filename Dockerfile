@@ -12,10 +12,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code.
+# Copy all application code.
 COPY . .
 
-# Expose the port that the SCUM BOT’s Flask server uses.
+# Expose the port (make sure it matches the PORT environment variable, e.g., 8079).
 EXPOSE 8079
 
 # Startup command.
