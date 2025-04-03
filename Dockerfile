@@ -13,4 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8079", "--workers", "1", "scum_bot:app"]
+RUN mkdir -p /data && chmod 777 /data
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8079", "--workers", "1", "--timeout", "120", "--preload", "scum_bot:app"]
