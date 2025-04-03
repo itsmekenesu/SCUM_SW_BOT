@@ -1,3 +1,4 @@
+# Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -11,8 +12,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create data directory in container's ephemeral storage
-RUN mkdir -p /data && \
-    chmod 755 /data
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8079", "app.vps_server:app"]
+# Single process model
+CMD ["gunicorn", "--bind", "0.0.0.0:8079", "--workers", "1", "--timeout", "120", "app.vps_server:app"]
