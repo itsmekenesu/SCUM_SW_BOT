@@ -9,10 +9,7 @@ app = Flask(__name__)
 API_KEY = os.getenv('VPS_API_KEY')
 DISCORD_WEBHOOK = os.getenv('DISCORD_WEBHOOK')
 
-# Create a blueprint for API routes
-api_bp = Blueprint('api', __name__)
-
-# In-memory bot registry
+# In-memory bot registry; key is bot_id, value is a dict of details.
 bots = {}
 
 def require_api_key(f):
@@ -23,23 +20,31 @@ def require_api_key(f):
         return f(*args, **kwargs)
     return decorated
 
+# Create a blueprint so all API endpoints are under /api
+api_bp = Blueprint('api', __name__)
+
 @api_bp.route('/bot/register', methods=['POST'])
 @require_api_key
 def register_bot():
     data = request.json
     bot_id = data['bot_id']
     
+    # Store registration details along with the timestamp
     bots[bot_id] = {
         'last_seen': datetime.now().isoformat(),
         'callback_url': data['callback_url'],
         'public_ip': data['public_ip'],
+        'version': data.get("version", "unknown"),
         'status': 'online'
     }
     
-    # Send Discord notification about bot registration
-    requests.post(DISCORD_WEBHOOK, json={
-        'content': f"🟢 Bot {bot_id} came online\nIP: {data['public_ip']}"
-    })
+    # Optionally send a Discord update
+    try:
+        requests.post(DISCORD_WEBHOOK, json={
+            'content': f"🟢 Bot {bot_id} registered (IP: {data['public_ip']})."
+        })
+    except Exception as e:
+        print(f"Discord update failed: {e}")
     
     return jsonify({"status": "registered"})
 
@@ -53,6 +58,7 @@ def forward_command():
         return jsonify({"error": "Bot not found"}), 404
         
     try:
+        # Forward the command to the bot's callback URL
         response = requests.post(
             bots[bot_id]['callback_url'],
             json=data['command'],
@@ -71,19 +77,22 @@ def receive_heartbeat():
         bots[bot_id]['last_seen'] = datetime.now().isoformat()
     return jsonify({"status": "updated"})
 
-# Register blueprint so that routes are accessible under /api
-app.register_blueprint(api_bp, url_prefix='/api')
+@api_bp.route('/bot/feedback', methods=['POST'])
+@require_api_key
+def receive_feedback():
+    data = request.json
+    # Here you can log feedback from the bot after executing a command.
+    print(f"Feedback received for bot {data.get('bot_id')}: {data}")
+    return jsonify({"status": "feedback received"})
 
+# A simple status page (for debugging) that shows all registered bots.
 @app.route('/')
 def status():
-    # This page shows a simple status of registered bots.
     return render_template('status.html', bots=bots)
 
-# Placeholder for the AutoConfigBot class used in main.py
-class AutoConfigBot:
-    def start(self):
-        print("AutoConfigBot started")
+# Register blueprint so that all API routes are prefixed with /api
+app.register_blueprint(api_bp, url_prefix='/api')
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 8079))
+    port = int(os.environ.get('PORT', 8079))
     app.run(host='0.0.0.0', port=port)
