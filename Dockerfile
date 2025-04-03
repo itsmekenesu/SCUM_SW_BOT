@@ -4,6 +4,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
+    sqlite3 \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -11,10 +13,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p /var/log/supervisor && \
-    mkdir -p /workspace/.data && \
-    chmod 755 /workspace/.data
+# Create required directories with proper permissions
+RUN mkdir -p \
+    /var/log/supervisor \
+    /workspace/.data \
+    && chmod 755 /workspace/.data
 
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Verify SQLite database path
+RUN echo "SQLite path: /workspace/.data/bots.db" && \
+    touch /workspace/.data/bots.db && \
+    chmod 644 /workspace/.data/bots.db
 
-CMD ["/usr/bin/supervisord"]
+COPY supervisord.conf /etc/supervisor/supervisord.conf
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
