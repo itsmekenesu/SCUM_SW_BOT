@@ -1,39 +1,40 @@
-# vps_server.py
+import os
+import sys
+import logging
+from datetime import datetime
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from datetime import datetime
-import os
-import logging
-import sys
+from sqlalchemy.exc import SQLAlchemyError
 import requests
-
-# Initialize Flask app
-app = Flask(__name__)
-CORS(app)  # Enable CORS if needed
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('/var/log/app.log')
+    ]
 )
 logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
 
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     'SQLALCHEMY_DATABASE_URI', 
-    'sqlite:////workspace/.data/bots.db'  # DigitalOcean persistent storage
+    'sqlite:////workspace/.data/bots.db'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300
+}
 
-# Initialize database
 db = SQLAlchemy(app)
 
-# Database model
 class Bot(db.Model):
     __tablename__ = 'bots'
-    
     bot_id = db.Column(db.String(50), primary_key=True)
     last_seen = db.Column(db.DateTime)
     callback_url = db.Column(db.String(255))
@@ -51,51 +52,48 @@ class Bot(db.Model):
             "status": self.status
         }
 
-# Create tables (for initial setup)
-with app.app_context():
-    try:
-        db.create_all()
-        logger.info("Database tables created/verified")
-    except Exception as e:
-        logger.error(f"Database initialization failed: {str(e)}")
-        raise
+# Initialize database
+def initialize_database():
+    with app.app_context():
+        try:
+            db.create_all()
+            logger.info("Database initialized successfully at: %s", 
+                      app.config['SQLALCHEMY_DATABASE_URI'])
+            # Verify database connection
+            db.session.execute('SELECT 1').fetchone()
+            logger.info("Database connection test successful")
+        except SQLAlchemyError as e:
+            logger.critical("Database initialization failed: %s", str(e))
+            sys.exit(1)
 
-# Middleware
+initialize_database()
+
 @app.before_request
 def log_request_info():
-    logger.info(f"{request.method} {request.path} - Headers: {dict(request.headers)}")
+    logger.info("Request: %s %s", request.method, request.path)
 
-# Helper functions
-def get_auth_header():
-    api_key = os.getenv('VPS_API_KEY')
-    if not api_key:
-        logger.error("VPS_API_KEY environment variable not set!")
-        raise ValueError("API key not configured")
-    return {'X-API-Key': api_key}
-
-# Routes
-@app.route('/api/health')
+@app.route('/api/health', methods=['GET'])
 def health_check():
-    """Simple health check endpoint"""
-    return jsonify({"status": "healthy", "timestamp": datetime.utcnow().isoformat()})
+    try:
+        # Simple database check
+        db.session.execute('SELECT 1').fetchone()
+        return jsonify({
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "database": "connected"
+        })
+    except SQLAlchemyError:
+        return jsonify({"status": "unhealthy", "database": "disconnected"}), 500
 
 @app.route('/api/bot/register', methods=['POST'])
 def register_bot():
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
-            
-        bot_id = data.get('bot_id')
-        if not bot_id:
-            return jsonify({"error": "Missing bot_id"}), 400
+        if not data or 'bot_id' not in data:
+            return jsonify({"error": "Invalid request"}), 400
 
-        bot = Bot.query.get(bot_id)
-        if not bot:
-            bot = Bot(bot_id=bot_id)
-            db.session.add(bot)
-            logger.info(f"New bot registered: {bot_id}")
-
+        bot = Bot.query.get(data['bot_id']) or Bot(bot_id=data['bot_id'])
+        
         update_fields = {
             'last_seen': datetime.utcnow(),
             'callback_url': data.get('callback_url'),
@@ -105,38 +103,41 @@ def register_bot():
         }
 
         for key, value in update_fields.items():
-            setattr(bot, key, value)
+            if value is not None:
+                setattr(bot, key, value)
 
+        db.session.add(bot)
         db.session.commit()
 
         # Send Discord notification
-        discord_webhook = os.getenv('DISCORD_WEBHOOK')
-        if discord_webhook:
+        if webhook := os.getenv('DISCORD_WEBHOOK'):
             try:
                 requests.post(
-                    discord_webhook,
-                    json={'content': f"🟢 Bot {bot_id} registered (IP: {data['public_ip']})"},
-                    timeout=5
+                    webhook,
+                    json={'content': f"🟢 Bot {data['bot_id']} registered"},
+                    timeout=3
                 )
             except Exception as e:
-                logger.error(f"Discord notification failed: {str(e)}")
+                logger.warning("Discord notification failed: %s", str(e))
 
         return jsonify(bot.as_dict())
 
-    except Exception as e:
-        logger.error(f"Registration error: {str(e)}")
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Database error during registration: %s", str(e))
+        return jsonify({"error": "Database operation failed"}), 500
+    except Exception as e:
+        logger.error("Unexpected error: %s", str(e))
         return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/api/bot/heartbeat', methods=['POST'])
 def receive_heartbeat():
     try:
         data = request.get_json()
-        bot_id = data.get('bot_id')
-        if not bot_id:
-            return jsonify({"error": "Missing bot_id"}), 400
+        if not data or 'bot_id' not in data:
+            return jsonify({"error": "Invalid request"}), 400
 
-        bot = Bot.query.get(bot_id)
+        bot = Bot.query.get(data['bot_id'])
         if not bot:
             return jsonify({"error": "Bot not found"}), 404
 
@@ -144,31 +145,15 @@ def receive_heartbeat():
         db.session.commit()
         return jsonify({"status": "updated"})
 
-    except Exception as e:
-        logger.error(f"Heartbeat error: {str(e)}")
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error("Database error in heartbeat: %s", str(e))
+        return jsonify({"error": "Database operation failed"}), 500
+    except Exception as e:
+        logger.error("Unexpected error: %s", str(e))
         return jsonify({"error": "Internal server error"}), 500
-
-@app.route('/')
-def status_dashboard():
-    try:
-        bots = Bot.query.all()
-        return render_template('status.html', bots=[b.as_dict() for b in bots])
-    except Exception as e:
-        logger.error(f"Dashboard error: {str(e)}")
-        return render_template('error.html'), 500
-
-# Database connection check
-@app.route('/api/db-check')
-def db_check():
-    try:
-        Bot.query.limit(1).all()
-        return jsonify({"database": "connected"})
-    except Exception as e:
-        logger.error(f"Database connection failed: {str(e)}")
-        return jsonify({"database": "connection failed"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8079))
-    logger.info(f"Starting server on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_DEBUG', False))
+    logger.info("Starting application on port %d", port)
+    app.run(host='0.0.0.0', port=port)
