@@ -11,37 +11,27 @@ from discord.ext import commands
 import requests
 import psutil
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry  # NEW: For retry logic [[5]][[6]]
+from requests.packages.urllib3.util.retry import Retry
 
-# =======================
-# CONFIGURATION
-# =======================
+# Configuration
 API_KEY = os.getenv('VPS_API_KEY')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 AUTHORIZED_USER_ID = 912964118447816735
-DATABASE_PATH = '/tmp/bots.db'
+DATABASE_PATH = '/data/bots.db'  # Changed to /data for persistence [[6]]
 
-# =======================
-# LOGGING SETUP
-# =======================
+# Logging setup
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()]
 )
-# NEW: Suppress urllib3 debug logs from requests [[9]]
-logging.getLogger('urllib3').setLevel(logging.ERROR)
-
+logging.getLogger('urllib3').setLevel(logging.ERROR)  # Suppress noisy logs [[9]]
 logger = logging.getLogger(__name__)
 
-# =======================
-# FLASK APPLICATION
-# =======================
+# Flask app
 app = Flask(__name__)
 
-# =======================
-# DATABASE SETUP
-# =======================
+# Database setup
 def init_db():
     conn = sqlite3.connect(DATABASE_PATH)
     try:
@@ -55,49 +45,34 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
-
 init_db()
 
-# =======================
-# DISCORD BOT SETUP
-# =======================
+# Discord bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-
 class ScumBot(commands.Bot):
     def __init__(self):
-        super().__init__(
-            command_prefix="!",
-            intents=intents,
-            help_command=None
-        )
-        
+        super().__init__(command_prefix="!", intents=intents, help_command=None)
     async def setup_hook(self):
         await self.tree.sync()
-
 bot = ScumBot()
 
-# =======================
-# CORE FUNCTIONALITY
-# =======================
+# Core functionality
 def get_db_connection():
     return sqlite3.connect(DATABASE_PATH)
 
 def process_command(bot_id: str, command: str, user: str):
     try:
+        # Fetch callback URL
         with get_db_connection() as conn:
-            cur = conn.execute(
-                "SELECT callback_url FROM bots WHERE bot_id = ?",
-                (bot_id,)
-            )
+            cur = conn.execute("SELECT callback_url FROM bots WHERE bot_id = ?", (bot_id,))
             result = cur.fetchone()
-            
         if not result:
             return False, "Bot not registered"
-            
+
         callback_url = result[0]
 
-        # NEW: Add retry logic with session [[5]][[6]][[7]]
+        # Retry logic for network requests [[5]][[7]]
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
@@ -109,45 +84,35 @@ def process_command(bot_id: str, command: str, user: str):
         http.mount("https://", adapter)
         http.mount("http://", adapter)
 
+        # Send command to callback URL
         response = http.post(
             callback_url,
-            json={
-                "command": command,
-                "source": "discord",
-                "user": user
-            },
+            json={"command": command, "source": "discord", "user": user},
             headers={"X-API-Key": API_KEY},
-            timeout=15  # Increased timeout for reliability
+            timeout=15
         )
-        
-        # NEW: Validate response format [[3]][[4]]
+
+        # Validate response [[3]][[6]]
         if response.status_code != 200:
             return False, f"HTTP {response.status_code}: {response.reason}"
-            
-        content_type = response.headers.get('Content-Type', '')
-        if 'application/json' not in content_type:
-            return False, f"Unexpected response format: {response.text}"
-            
+        if 'application/json' not in response.headers.get('Content-Type', ''):
+            return False, f"Invalid response format: {response.text}"
         try:
             response_data = response.json()
         except requests.exceptions.JSONDecodeError:
-            return False, f"Invalid JSON response: {response.text}"  # [[4]][[6]]
-            
+            return False, f"Invalid JSON: {response.text}"
         if 'error' in response_data:
             return False, response_data['error']
-            
         return True, response_data.get('result', 'Command executed')
-        
+
     except requests.exceptions.RequestException as e:
-        logger.error(f"Network error during command processing: {str(e)}")
+        logger.error(f"Network error: {e}")
         return False, f"Network error: {str(e)}"
     except Exception as e:
-        logger.error(f"Command processing failed: {str(e)}", exc_info=True)
+        logger.error(f"Command failed: {e}", exc_info=True)
         return False, f"Internal error: {str(e)}"
 
-# =======================
-# FLASK ROUTES
-# =======================
+# Flask routes
 @app.route('/api/health')
 def health_check():
     try:
@@ -164,7 +129,7 @@ def health_check():
 @app.route('/api/bot/register', methods=['POST'])
 def register_bot():
     try:
-        data = request.get_json()  # NEW: Use built-in Flask method [[8]]
+        data = request.get_json()
         with get_db_connection() as conn:
             conn.execute('''INSERT OR REPLACE INTO bots 
                          VALUES (?, ?, ?, ?, ?, ?)''',
@@ -174,25 +139,18 @@ def register_bot():
             conn.commit()
         return jsonify({"status": "registered"})
     except Exception as e:
-        logger.error(f"Registration failed: {str(e)}")
+        logger.error(f"Registration failed: {e}")
         return jsonify({"error": str(e)}), 500
 
-# =======================
-# DISCORD COMMANDS
-# =======================
+# Discord commands
 @bot.tree.command(name="scum", description="Manage SCUM bots")
-@app_commands.describe(
-    bot_id="Target bot ID", 
-    command="Command (verify/status/say <message>)"
-)
+@app_commands.describe(bot_id="Target bot ID", command="Command (verify/status/say <message>)")
 async def scum_command(interaction: discord.Interaction, bot_id: str, command: str):
     if interaction.user.id != AUTHORIZED_USER_ID:
         await interaction.response.send_message("❌ Unauthorized", ephemeral=True)
         return
-    
     await interaction.response.defer(ephemeral=True)
     success, result = process_command(bot_id, command, str(interaction.user))
-    
     if success:
         await interaction.followup.send(f"✅ {result}")
     else:
@@ -202,9 +160,7 @@ async def scum_command(interaction: discord.Interaction, bot_id: str, command: s
 async def on_ready():
     logger.info(f"Logged in as {bot.user}")
 
-# =======================
-# APPLICATION STARTUP
-# =======================
+# Startup
 def run_flask():
     port = int(os.getenv('PORT', 8079))
     app.run(host='0.0.0.0', port=port)
