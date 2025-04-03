@@ -1,13 +1,16 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, Blueprint
 from datetime import datetime
-import json
 import os
 import requests
 from functools import wraps
 
 app = Flask(__name__)
+
 API_KEY = os.getenv('VPS_API_KEY')
 DISCORD_WEBHOOK = os.getenv('DISCORD_WEBHOOK')
+
+# Create a blueprint for API routes
+api_bp = Blueprint('api', __name__)
 
 # In-memory bot registry
 bots = {}
@@ -20,11 +23,7 @@ def require_api_key(f):
         return f(*args, **kwargs)
     return decorated
 
-@app.route('/')
-def status():
-    return render_template('status.html', bots=bots)
-
-@app.route('/bot/register', methods=['POST'])
+@api_bp.route('/bot/register', methods=['POST'])
 @require_api_key
 def register_bot():
     data = request.json
@@ -37,14 +36,14 @@ def register_bot():
         'status': 'online'
     }
     
-    # Send Discord notification
+    # Send Discord notification about bot registration
     requests.post(DISCORD_WEBHOOK, json={
         'content': f"🟢 Bot {bot_id} came online\nIP: {data['public_ip']}"
     })
     
     return jsonify({"status": "registered"})
 
-@app.route('/bot/command', methods=['POST'])
+@api_bp.route('/bot/command', methods=['POST'])
 @require_api_key
 def forward_command():
     data = request.json
@@ -64,7 +63,7 @@ def forward_command():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/bot/heartbeat', methods=['POST'])
+@api_bp.route('/bot/heartbeat', methods=['POST'])
 @require_api_key
 def receive_heartbeat():
     bot_id = request.json['bot_id']
@@ -72,5 +71,19 @@ def receive_heartbeat():
         bots[bot_id]['last_seen'] = datetime.now().isoformat()
     return jsonify({"status": "updated"})
 
+# Register blueprint so that routes are accessible under /api
+app.register_blueprint(api_bp, url_prefix='/api')
+
+@app.route('/')
+def status():
+    # This page shows a simple status of registered bots.
+    return render_template('status.html', bots=bots)
+
+# Placeholder for the AutoConfigBot class used in main.py
+class AutoConfigBot:
+    def start(self):
+        print("AutoConfigBot started")
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8079)
+    port = int(os.getenv('PORT', 8079))
+    app.run(host='0.0.0.0', port=port)
