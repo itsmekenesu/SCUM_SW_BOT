@@ -7,7 +7,7 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# Configure SQLAlchemy to use SQLite local database file
+# Configure SQLAlchemy with your database (defaults to local SQLite file)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///bots.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -42,7 +42,7 @@ def require_api_key(f):
         return f(*args, **kwargs)
     return decorated
 
-# All API endpoints are grouped under this blueprint.
+# Create a blueprint so all API endpoints are under /api
 api_bp = Blueprint('api', __name__)
 
 @api_bp.route('/bot/register', methods=['POST'])
@@ -50,13 +50,12 @@ api_bp = Blueprint('api', __name__)
 def register_bot():
     data = request.json
     bot_id = data['bot_id']
-    now = datetime.now()
-
+    
     # Upsert bot registration
     bot = Bot.query.get(bot_id)
     if not bot:
         bot = Bot(bot_id=bot_id)
-    bot.last_seen = now
+    bot.last_seen = datetime.now()
     bot.callback_url = data['callback_url']
     bot.public_ip = data['public_ip']
     bot.version = data.get("version", "unknown")
@@ -64,14 +63,14 @@ def register_bot():
     db.session.add(bot)
     db.session.commit()
 
-    # Send a Discord update to the designated channel
+    # Optionally send a Discord update
     try:
         requests.post(DISCORD_WEBHOOK, json={
             'content': f"🟢 Bot {bot_id} registered (IP: {data['public_ip']})."
         })
     except Exception as e:
         print(f"Discord update failed: {e}")
-
+    
     return jsonify({"status": "registered"})
 
 @api_bp.route('/bot/command', methods=['POST'])
@@ -120,10 +119,14 @@ def status():
     bots_list = [bot.as_dict() for bot in bots]
     return render_template('status.html', bots=bots_list)
 
+# Register blueprint so that all API routes are prefixed with /api
 app.register_blueprint(api_bp, url_prefix='/api')
 
+# <-- NEW: Create the database tables on first request if they don't exist.
+@app.before_first_request
+def create_tables():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     port = int(os.environ.get('PORT', 8079))
     app.run(host='0.0.0.0', port=port)
