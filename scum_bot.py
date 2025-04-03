@@ -10,13 +10,15 @@ from discord import app_commands
 from discord.ext import commands
 import requests
 import psutil
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry  # NEW: For retry logic [[5]][[6]]
 
 # =======================
 # CONFIGURATION
 # =======================
 API_KEY = os.getenv('VPS_API_KEY')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-AUTHORIZED_USER_ID = 912964118447816735  # REPLACE WITH YOUR DISCORD ID
+AUTHORIZED_USER_ID = 912964118447816735
 DATABASE_PATH = '/tmp/bots.db'
 
 # =======================
@@ -27,6 +29,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()]
 )
+# NEW: Suppress urllib3 debug logs from requests [[9]]
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+
 logger = logging.getLogger(__name__)
 
 # =======================
@@ -91,8 +96,20 @@ def process_command(bot_id: str, command: str, user: str):
             return False, "Bot not registered"
             
         callback_url = result[0]
-        
-        response = requests.post(
+
+        # NEW: Add retry logic with session [[5]][[6]][[7]]
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["POST"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        http = requests.Session()
+        http.mount("https://", adapter)
+        http.mount("http://", adapter)
+
+        response = http.post(
             callback_url,
             json={
                 "command": command,
@@ -100,16 +117,33 @@ def process_command(bot_id: str, command: str, user: str):
                 "user": user
             },
             headers={"X-API-Key": API_KEY},
-            timeout=10
+            timeout=15  # Increased timeout for reliability
         )
         
-        if response.status_code == 200:
-            return True, response.json().get('result', 'Command executed')
-        return False, response.json().get('error', 'Unknown error')
+        # NEW: Validate response format [[3]][[4]]
+        if response.status_code != 200:
+            return False, f"HTTP {response.status_code}: {response.reason}"
+            
+        content_type = response.headers.get('Content-Type', '')
+        if 'application/json' not in content_type:
+            return False, f"Unexpected response format: {response.text}"
+            
+        try:
+            response_data = response.json()
+        except requests.exceptions.JSONDecodeError:
+            return False, f"Invalid JSON response: {response.text}"  # [[4]][[6]]
+            
+        if 'error' in response_data:
+            return False, response_data['error']
+            
+        return True, response_data.get('result', 'Command executed')
         
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error during command processing: {str(e)}")
+        return False, f"Network error: {str(e)}"
     except Exception as e:
-        logger.error(f"Command processing failed: {str(e)}")
-        return False, str(e)
+        logger.error(f"Command processing failed: {str(e)}", exc_info=True)
+        return False, f"Internal error: {str(e)}"
 
 # =======================
 # FLASK ROUTES
@@ -130,7 +164,7 @@ def health_check():
 @app.route('/api/bot/register', methods=['POST'])
 def register_bot():
     try:
-        data = request.json
+        data = request.get_json()  # NEW: Use built-in Flask method [[8]]
         with get_db_connection() as conn:
             conn.execute('''INSERT OR REPLACE INTO bots 
                          VALUES (?, ?, ?, ?, ?, ?)''',
@@ -140,6 +174,7 @@ def register_bot():
             conn.commit()
         return jsonify({"status": "registered"})
     except Exception as e:
+        logger.error(f"Registration failed: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # =======================
