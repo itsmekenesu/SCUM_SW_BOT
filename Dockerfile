@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Start both services in parallel
+# Start both services in parallel:
 CMD gunicorn --bind 0.0.0.0:8079 app.vps_server:app & \
     python -u app/discord_bot.py
