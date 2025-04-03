@@ -48,8 +48,8 @@ class ScumBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
-        # Set the command prefix to "!" for legacy commands.
-        super().__init__(command_prefix="!", intents=intents)
+        # Disable the default help command to avoid conflict.
+        super().__init__(command_prefix="!", intents=intents, help_command=None)
         
     async def setup_hook(self):
         # Sync both slash commands and legacy commands.
