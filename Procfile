@@ -1,1 +1,1 @@
-web: python main.py
+web: python scum_bot.py
