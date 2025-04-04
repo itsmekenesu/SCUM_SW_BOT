@@ -8,9 +8,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     libffi-dev \
     libnacl-dev \
+    python3-dev \
+    libssl-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy files
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -19,7 +21,7 @@ COPY . .
 # Create data directory
 RUN mkdir -p /data && chown -R 1000:1000 /data
 
-# Healthcheck
+# Healthcheck (ensure "CMD" is included) [[3]]
 HEALTHCHECK --interval=30s --timeout=10s \
   CMD curl -f http://localhost:8079/api/health || exit 1
 
